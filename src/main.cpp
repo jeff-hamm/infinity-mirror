@@ -1,42 +1,11 @@
 #include "main.h"
 #include "cserial.h"
+#ifdef USE_WIFI
+#include "ota.h"
+#endif
 
 FASTLED_USING_NAMESPACE
 CRGB leds[NUM_LEDS];
-
-const int speed = 60;
-int step = 1;
-int hue0 = 120;
-uint8_t intensity = 255;
-//CONFIG
-#define W_MAX_COUNT  1          //Number of simultaneous waves
-#define W_MAX_SPEED 2            //Higher number, higher speed
-#define W_WIDTH_FACTOR 8           //Higher number, smaller waves
-
-DEFINE_GRADIENT_PALETTE( heatmap_gp ) {
-//    0,0,0,0, // black
-    0,171,0,85, // pink
-    255,255,165,0// orange
-//  128,   255,255,255, // white
-//  192,25,25,25, // black
-}; 
-/*
-
-DEFINE_GRADIENT_PALETTE( heatmap_gp ) {
-  0,   255,255,255, // white
-  85,171,     85,  0,   //orange
-  170,0,0,0, // black
-  255,171,0,85, // pink
-}; 
-DEFINE_GRADIENT_PALETTE( heatmap_gp ) {
-  GRAD_NUM(0),0,0,0, // black
-  GRAD_NUM(1),171,     85,  0,   //orange
-  GRAD_NUM(2),0,0,0, // black
-  GRAD_NUM(3),255,255,255, //white
-  GRAD_NUM(4),0,0,0, // black
-  GRAD_NUM(5),171,0,85 // pink
-};*/ 
-
 
 void setup() {
   delay(200);
@@ -45,32 +14,32 @@ void setup() {
   setupOta();
   #endif
   // tell FastLED about the LED strip configuration
-  FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+  FastLED.addLeds<LED_TYPE,LED_DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   //FastLED.addLeds<LED_TYPE,DATA_PIN,CLK_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
 
    // set master brightness control
-  FastLED.setBrightness(BRIGHTNESS);
+  FastLED.setBrightness(Parameters.brightness);
   CSerial.println("Setup Complete");
 }
   
 
-CRGBPalette16 pallette = heatmap_gp;
 void loop()
 {
 //  Call the current pattern function once, updating the 'leds' array
-  mode_aurora();
-  // uint8_t front = beatsin8(5);
-  // uint8_t bri = beatsin8(17);
-  // for(int i= 0; i < 9; i++) {
-  //   leds[i] = ColorFromPalette(pallette, front, bri);
-  // }
-//  leds[1] = CRGB(0,123,255);
-//  leds[2] = CRGB(255,123,0);
-  // send the 'leds' array out to the actual LED strip
+  #ifdef ENABLE_MODE_SELECT
+  if(Parameters.mode == LED_MODE_AURORA)
+  #endif
+  #ifdef ENABLE_AURORA
+    mode_aurora();
+  #endif
+  #ifdef ENABLE_MODE_SELECT
+  else
+  #endif
+  #ifdef ENABLE_COLORWAVE
+    colorwaves();
+  #endif
   FastLED.show();  
-//  FastLED.delay(1000/FRAMES_PER_SECOND);
-  // insert a delay to keep the framerate modest
-  alive_delay(1000/FRAMES_PER_SECOND); 
+  alive_delay(1000/Parameters.fps); 
 
   // do some periodic updatess
 //  EVERY_N_MILLISECONDS( 20 ) { gHue++; } // slowly cycle the "base color" through the rainbow
@@ -93,25 +62,12 @@ void alive_delay(unsigned long ms) {
 	}
 	while((millis()-start) < ms);
 }
-
-uint8_t paletteBlend = 0;
-long _dataLen = 0;
-CRGB color_from_palette(uint8_t i, bool mapping, bool wrap, uint8_t mcol, uint8_t pbri=255)
-{
-  uint8_t paletteIndex = i;
-  if (mapping && NUM_LEDS > 1) paletteIndex = (i*255)/(NUM_LEDS -1);
-  if (!wrap) paletteIndex = scale8(paletteIndex, 240); //cut off blend at palette "end"
-  CRGB fastled_col;
-  fastled_col = ColorFromPalette(pallette, paletteIndex, pbri, (paletteBlend == 3)? NOBLEND:LINEARBLEND);
-
-  return fastled_col;
-}
-
-
-
+#ifdef ENABLE_COLORWAVE
+int step = 1;
+int hue0 = 120;
 uint16_t colorwaves()
 {
-  uint16_t duration = speed;
+  uint16_t duration = Parameters.baseSpeed;
   uint16_t sPseudotime = step;
   uint16_t sHue16 = hue0;
 
@@ -121,7 +77,7 @@ uint16_t colorwaves()
 
   uint16_t hue16 = sHue16;//gHue * 256;
   // uint16_t hueinc16 = beatsin88(113, 300, 1500);
-  uint16_t hueinc16 = beatsin88(113, 60, 300)*(intensity/255);  // Use the Intensity Slider for the hues
+  uint16_t hueinc16 = beatsin88(113, 60, 300)*(Parameters.intensity/255);  // Use the Intensity Slider for the hues
 
   sPseudotime += duration * msmultiplier;
   sHue16 += duration * beatsin88(400, 5, 9);
@@ -145,21 +101,27 @@ uint16_t colorwaves()
     uint8_t bri8 = (uint32_t)(((uint32_t)bri16) * brightdepth) / 65536;
     bri8 += (255 - brightdepth);
 
-    CRGB newcolor = ColorFromPalette(pallette, hue8, bri8);
-//    fastled_col = ;
-
+    CRGB newcolor = ColorFromPalette(Parameters.pallette, hue8, bri8);
     nblend(leds[(NUM_LEDS-1)-i], newcolor, 128);
-//    leds[i] = CRGB(fastled_col.red, fastled_col.green, fastled_col.blue);
   }
   step = sPseudotime;
   hue0 = sHue16;
   return 0;
 }
+#endif
+#ifdef ENABLE_AURORA
+uint8_t paletteBlend = 0;
+long _dataLen = 0;
+CRGB color_from_palette(uint8_t i, bool mapping, bool wrap, uint8_t mcol, uint8_t pbri=255)
+{
+  uint8_t paletteIndex = i;
+  if (mapping && NUM_LEDS > 1) paletteIndex = (i*255)/(NUM_LEDS -1);
+  if (!wrap) paletteIndex = scale8(paletteIndex, 240); //cut off blend at palette "end"
+  CRGB fastled_col;
+  fastled_col = ColorFromPalette(Parameters.pallette, paletteIndex, pbri, (paletteBlend == 3)? NOBLEND:LINEARBLEND);
 
-
-/*
-  Aurora effect
-*/
+  return fastled_col;
+}
 
 
 class AuroraWave {
@@ -179,15 +141,17 @@ class AuroraWave {
       #ifdef DEBUG_SERIAL
       CSerial.println("Init");
       #endif
-      ttl = 500;
+      ttl = Parameters.ttl;
       basecolor = color;
-      basealpha = random(60, 101) / (float)100;
+      basealpha = random(Parameters.minAlpha, Parameters.maxAlpha) / (float)100;
       age = 0;
-      width = random(segment_length / 20, segment_length / W_WIDTH_FACTOR); //half of width to make math easier
+      width = random(Parameters.minWidth, Parameters.maxWidth); //half of width to make math easier
       if (!width) width = 1;
+      if(width > segment_length)
+        width = segment_length;
       center = 0;
       goingleft = 0;
-      speed_factor = (random(20, 21) / (float)100 * W_MAX_SPEED / 255);
+      speed_factor = (random(Parameters.minSpeedFactor, Parameters.maxSpeedFactor) / (float)100 * Parameters.maxWaveSpeed / 255);
       alive = true;
     }
 
@@ -263,11 +227,11 @@ AuroraWave waves[W_MAX_COUNT];
 
 uint16_t mode_aurora(void) {
 
-  if(aux0 != intensity || call == 0) {
+  if(aux0 != Parameters.intensity || call == 0) {
     //Intensity slider changed or first call
     call++;
     aux1 = W_MAX_COUNT;
-    aux0 = intensity;
+    aux0 = Parameters.intensity;
     for(int i = 0; i < aux1; i++) {
       waves[i].init(NUM_LEDS, color_from_palette(random8(), false, false, random(0, 3)));
     }
@@ -276,7 +240,7 @@ uint16_t mode_aurora(void) {
 
   for(int i = 0; i < aux1; i++) {
     //Update values of wave
-    waves[i].update(NUM_LEDS, speed);
+    waves[i].update(NUM_LEDS, Parameters.baseSpeed);
 
     if(!(waves[i].stillAlive())) {
       //If a wave dies, reinitialize it starts over.
@@ -303,3 +267,4 @@ uint16_t mode_aurora(void) {
 
   return 0;
 }
+#endif

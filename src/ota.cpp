@@ -46,6 +46,7 @@ void setupOta() {
     WiFi.mode(WIFI_STA);
     CSerial.println("Starting WIFI");
     WiFi.onEvent(WiFiEvent);
+    WiFi.getHostname();
     ensureConnection();
     #endif
 

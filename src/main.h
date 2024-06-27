@@ -1,24 +1,26 @@
 #ifndef _MAIN_H
 #define _MAIN_H
-#ifdef __AVR_ATtiny85__
-#else
-//#define FASTLED_ESP8266_RAW_PIN_ORDER
-#include "ota.h"
-#endif
 //#define DEBUG_SERIAL
+//#define FASTLED_ESP8266_RAW_PIN_ORDER
+
 #include <Arduino.h>
 #include <FastLED.h>
+#include "parameters.h"
+
+#if  defined(USE_WIFI) || defined(MODE_SELECTOR_BUTTON)
+#define ENABLE_MODE_SELECT
+#endif
+#if W_DEFAULT_MODE == LED_MODE_AURORA || defined(ENABLE_MODE_SELECT)
+#define ENABLE_AURORA
 uint16_t mode_aurora();
+#endif
+#if W_DEFAULT_MODE == LED_MODE_COLORWAVE || defined(ENABLE_MODE_SELECT)
+#define ENABLE_COLORWAVE
+uint16_t colorwaves();
+#endif 
+
+
 void alive_delay(unsigned long ms);
-#define DATA_PIN    2
-//#define CLK_PIN   4
-#define LED_TYPE    WS2811
-#define COLOR_ORDER GRB
-#define NUM_LEDS    16
-#define BRIGHTNESS          255
-#define FRAMES_PER_SECOND  120
-#define GRADIENT_COUNT 5
-#define GRAD_NUM(x) (((255/GRADIENT_COUNT)*x))
 extern CRGB leds[];
 
 #endif
